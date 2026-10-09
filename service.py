@@ -1,121 +1,142 @@
 # -*- coding: utf-8 -*-
-"""
-Background service: keeps the Mako live stream alive past token expiry.
-
-How it works:
-  - Wakes up every 30 s
-  - If something is playing from mako-streaming.akamaized.net
-  - Extracts the hdnea expiry from the current URL
-  - If expiry is < 3 min away, re-resolves and calls Player.updateStream()
-
-Kodi runs service.py automatically on startup because the addon.xml declares it.
-"""
-import os, re, time, sys
-import xbmc, xbmcaddon
+"""Mako Live background service - token refresh + update check."""
+import os, re, time, json, sys
+import xbmc, xbmcaddon, xbmcgui
 
 _ADDON = xbmcaddon.Addon()
 _LIB = os.path.join(_ADDON.getAddonInfo("path"), "resources", "lib")
 if _LIB not in sys.path:
     sys.path.insert(0, _LIB)
 
-from resources.lib.mako import resolve, LIVE_URL
+POLL_SECONDS   = 30
+REFRESH_BEFORE = 180
+EXP_RE         = re.compile(r"exp(?:%3D|=)(\d{9,11})", re.I)
 
-POLL_SECONDS = 30
-REFRESH_BEFORE = 180          # refresh when < 3 min remain
-EXP_RE = re.compile(r"exp(?:%3D|=)(\d{9,11})", re.I)
+GITHUB_API   = "https://api.github.com/repos/SpaceAceIL/plugin.video.mako/releases/latest"
+CHECK_EVERY  = 6 * 3600   # check every 6 h
 
+
+def _log(m):
+    xbmc.log("[mako-service] " + m, xbmc.LOGINFO)
+
+
+def _ver_tuple(v):
+    try:
+        return tuple(int(x) for x in re.split(r"[.\-]", v) if x.isdigit())
+    except Exception:
+        return (0,)
+
+
+def _check_update_once():
+    """Query GitHub for the latest release and notify if newer."""
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            GITHUB_API, headers={"User-Agent": "Mako-Live-Service"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except Exception as e:
+        _log("update check failed: {0}".format(e))
+        return
+
+    latest = (data.get("tag_name") or "").lstrip("v")
+    current = _ADDON.getAddonInfo("version")
+    if not latest:
+        return
+    if _ver_tuple(latest) > _ver_tuple(current):
+        _log("update available: v{0} (you have v{1})".format(latest, current))
+        try:
+            xbmcgui.Dialog().notification(
+                "Mako Live update",
+                "v{0} available (you have v{1})".format(latest, current),
+                xbmcgui.NOTIFICATION_INFO, 8000)
+        except Exception:
+            pass
+
+
+# ---------- token refresh (existing logic) ----------
 
 def _current_mako_url():
-    """Return the currently-playing mako URL, or None."""
     player = xbmc.Player()
     if not player.isPlaying():
         return None
     try:
-        url = player.getPlayingFile() or ""
+        u = player.getPlayingFile() or ""
     except Exception:
         return None
-    if "mako-streaming.akamaized.net" not in url:
+    if "mako-streaming.akamaized.net" not in u:
         return None
-    return url
+    return u
 
 
-def _expiry_from_url(url):
-    """Return the epoch-seconds expiry embedded in the hdnea token, or 0."""
-    m = EXP_RE.search(url)
-    if not m:
-        return 0
-    try:
-        return int(m.group(1))
-    except Exception:
-        return 0
+def _expiry(u):
+    m = EXP_RE.search(u)
+    return int(m.group(1)) if m else 0
 
 
-def _seconds_left(url):
-    exp = _expiry_from_url(url)
-    if not exp:
-        return 999999
-    return exp - int(time.time())
-
-
-def _log(msg):
-    xbmc.log("[mako-service] " + msg, xbmc.LOGINFO)
+def _seconds_left(u):
+    e = _expiry(u)
+    return (e - int(time.time())) if e else 999999
 
 
 def main():
     _log("service started")
+
+    # ---- update check on boot (delayed a few seconds so Kodi is ready) ----
     monitor = xbmc.Monitor()
+    if monitor.waitForAbort(15):
+        return
+    _check_update_once()
+
+    # ---- main loop: token refresh + periodic update re-check ----
     last_refresh = 0.0
+    last_check   = time.time()
 
     while not monitor.abortRequested():
         if monitor.waitForAbort(POLL_SECONDS):
             break
 
+        # periodic update check
+        if time.time() - last_check > CHECK_EVERY:
+            _check_update_once()
+            last_check = time.time()
+
+        # token refresh
         url = _current_mako_url()
         if not url:
             continue
-
         left = _seconds_left(url)
-        if left <= 0:
-            _log("token expired before we could refresh (left={0}s)".format(left))
         if left > REFRESH_BEFORE:
             continue
-
-        # avoid hammering: only refresh once per 60 s
         now = time.time()
         if now - last_refresh < 60:
             continue
         last_refresh = now
 
-        _log("token expires in {0}s — refreshing".format(left))
+        _log("token expires in {0}s - refreshing".format(left))
         try:
+            from resources.lib.mako import resolve, LIVE_URL
             new_url, _ = resolve(LIVE_URL, log=xbmc.log)
-        except Exception as exc:
-            _log("resolve failed: {0}".format(exc))
+        except Exception as e:
+            _log("resolve failed: {0}".format(e))
             continue
 
-        _log("got fresh token; updating stream")
         try:
-            # updateStream keeps playback going with the new URL
             xbmc.Player().updateStream(new_url)
             _log("updateStream ok")
-        except Exception as exc:
-            _log("updateStream failed: {0} — stopping and restarting".format(exc))
+        except Exception as e:
+            _log("updateStream failed: {0} - restarting".format(e))
             try:
                 xbmc.Player().stop()
                 xbmc.sleep(500)
-                import xbmcgui
                 li = xbmcgui.ListItem(path=new_url)
                 li.setMimeType("application/vnd.apple.mpegurl")
-                try:
-                    xbmcaddon.Addon("inputstream.adaptive")
-                    li.setProperty("inputstream", "inputstream.adaptive")
-                    li.setProperty("inputstream.adaptive.manifest_type", "hls")
-                except Exception:
-                    pass
+                li.setProperty("inputstream", "inputstream.adaptive")
+                li.setProperty("inputstream.adaptive.manifest_type", "hls")
                 xbmc.Player().play(new_url, li)
-                _log("restarted playback with fresh token")
-            except Exception as exc2:
-                _log("restart failed: {0}".format(exc2))
+                _log("restarted")
+            except Exception as e2:
+                _log("restart failed: {0}".format(e2))
 
     _log("service stopped")
 
