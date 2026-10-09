@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 """Mako resolver - AES-192-CBC token flow, verified live."""
 import re, json, base64, requests
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import pad, unpad
+try:
+    from Crypto.Cipher import AES
+    from Crypto.Util.Padding import pad, unpad
+    _HAVE_CRYPTO = True
+except ImportError:
+    _HAVE_CRYPTO = False
+    from mini_aes import cbc_encrypt as _cbc_enc, cbc_decrypt as _cbc_dec
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
