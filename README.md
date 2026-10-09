@@ -1,6 +1,6 @@
 # Mako Live - Kodi Addon
 
-Made by **SpaceAce** <space@anan.media>
+Made by **SpaceAce** <>
 
 Play the Mako / Channel 12 live stream directly inside Kodi.
 
