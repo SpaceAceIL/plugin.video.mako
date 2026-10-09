@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Pure-Python AES-CBC (128/192/256), PKCS7. No dependencies.
-Made by SpaceAce - space@anan.media."""
+"""Pure-Python AES-CBC (128/192/256), PKCS7. No dependencies."""
 
 def _gen_sbox():
     p, q = 1, 1
@@ -131,15 +130,3 @@ def cbc_decrypt(key, iv, ct):
     pad = out[-1]
     if pad < 1 or pad > 16: raise ValueError("bad padding")
     return bytes(out[:-pad])
-
-if __name__ == "__main__":
-    import base64
-    key = b"YhnUaXMmltB6gd8p9SWleQ=="
-    iv  = b"theExact16Chars="[:16]
-    msg = b'{"test":1}'
-    ct  = cbc_encrypt(key, iv, msg)
-    print("ct   =", base64.b64encode(ct).decode())
-    pt  = cbc_decrypt(key, iv, ct)
-    print("rt   =", pt.decode())
-    assert pt == msg
-    print("AES self-test OK")
