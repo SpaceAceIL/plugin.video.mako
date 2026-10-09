@@ -41,9 +41,7 @@ def _secs_left(u):
 
 
 def _rec_dir():
-    d = _ADDON.getSetting("recordings_dir") or ""
-    if not d:
-        d = os.path.join(_ADDON.getAddonInfo("profile"), "recordings")
+    d = recorder.configured_dir()
     if not os.path.isdir(d):
         try:
             os.makedirs(d, exist_ok=True)
@@ -53,7 +51,7 @@ def _rec_dir():
 
 
 def _check_recorders():
-    ffmpeg = recorder.find_ffmpeg(_ADDON.getSetting("ffmpeg_path") or "")
+    ffmpeg = recorder.find_ffmpeg(recorder.configured_ffmpeg())
     now = int(time.time())
     timers = recorder.load_timers()
     active = recorder.load_active()

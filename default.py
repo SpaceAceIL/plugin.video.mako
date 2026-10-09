@@ -16,23 +16,14 @@ HANDLE  = int(sys.argv[1]) if len(sys.argv) > 1 else -1
 BASEURL = sys.argv[0] if sys.argv else ""
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+WORKER = "https://mako-live.spacestangs.workers.dev/live.m3u8"
 
-
-def he(s):
-    if not s:
-        return s
-    if any("\u0590" <= c <= "\u05ff" for c in s):
-        return "\u200f" + s
-    return s
-
-
-# ---------- channel list ----------
 CHANNELS = [
     {"name": "Kan 11",          "type": "direct",
      "url": "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11/live.livx/playlist.m3u8",
      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Kan11Logo.svg/500px-Kan11Logo.svg.png"},
-    {"name": "Keshet 12",       "type": "mako",
-     "url": LIVE_URL,
+    {"name": "Keshet 12",       "type": "direct",
+     "url": WORKER,
      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/Keshet12_2018.svg/960px-Keshet12_2018.svg.png"},
     {"name": "Channel 13",      "type": "direct",
      "url": "https://d2xg1g9o5vns8m.cloudfront.net/out/v1/0855d703f7d5436fae6a9c7ce8ca5075/index.m3u8",
@@ -50,6 +41,14 @@ CHANNELS = [
      "url": "http://stream.mcquack.net/48/index.m3u8",
      "logo": ""},
 ]
+
+
+def he(s):
+    if not s:
+        return s
+    if any("\u0590" <= c <= "\u05ff" for c in s):
+        return "\u200f" + s
+    return s
 
 
 def url(**params):
@@ -87,31 +86,9 @@ def _play(stream_url):
             pass
     xbmc.Player().play(stream_url, li)
     xbmc.sleep(3000)
-    xbmcgui.Dialog().notification(
-        "Israeli TV",
-        "Playing. Ctrl+R to record.",
-        xbmcgui.NOTIFICATION_INFO, 4000)
+    xbmcgui.Dialog().notification("Israeli TV", "Playing. Ctrl+R to record.",
+                                  xbmcgui.NOTIFICATION_INFO, 4000)
 
-
-def _play_mako(article):
-    pd = xbmcgui.DialogProgress(); pd.create("Mako", "Resolving...")
-    try:
-        pd.update(30, "Fetching...")
-        s, _ = resolve(article, log=xbmc.log)
-        pd.update(90, "Playing...")
-        pd.close()
-        _play(s)
-    except Exception as e:
-        xbmc.log("[israelitv] " + str(e), xbmc.LOGERROR)
-        xbmcgui.Dialog().notification("Mako", str(e),
-                                      xbmcgui.NOTIFICATION_ERROR, 6000)
-        if HANDLE >= 0:
-            xbmcplugin.setResolvedUrl(HANDLE, False, xbmcgui.ListItem())
-        try: pd.close()
-        except: pass
-
-
-# ---------- menus ----------
 
 def main_menu():
     for i, ch in enumerate(CHANNELS):
@@ -120,8 +97,8 @@ def main_menu():
             li.setArt({"thumb": ch["logo"], "icon": ch["logo"]})
         xbmcplugin.addDirectoryItem(HANDLE, url(mode="play", idx=i),
                                     li, isFolder=False)
-    add_dir("📺  TV Guide (Channel 12)", {"mode": "guide"})
-    add_dir("⏺  Scheduled Recordings",   {"mode": "timers"})
+    add_dir("📺  TV Guide", {"mode": "guide"})
+    add_dir("⏺  Scheduled Recordings", {"mode": "timers"})
     xbmcplugin.endOfDirectory(HANDLE)
 
 
@@ -130,16 +107,15 @@ def tv_guide():
         programs = epg.fetch_epg(log=xbmc.log)
     except Exception as e:
         xbmcgui.Dialog().notification("EPG", str(e),
-                                      xbmcgui.NOTIFICATION_ERROR, 6000)
+                                      xbmcgui.NOTIFICATION_ERROR, 5000)
         xbmcplugin.endOfDirectory(HANDLE)
         return
 
     now_ms = int(time.time() * 1000)
-    items = [p for p in programs
-             if p["start_ms"] + p["duration_ms"] > now_ms - 7200000
-             and p["start_ms"] < now_ms + 24 * 3600 * 1000]
-
-    for p in items:
+    for p in programs:
+        if not (p["start_ms"] + p["duration_ms"] > now_ms - 7200000 and
+                p["start_ms"] < now_ms + 24 * 3600 * 1000):
+            continue
         is_now = p["start_ms"] <= now_ms < p["start_ms"] + p["duration_ms"]
         marker = "▶" if is_now else "  "
         label = "{0}  {1}-{2}  {3}".format(
@@ -163,7 +139,7 @@ def tv_guide():
 
 def program_menu(title, start_ms, dur_ms, is_now):
     if is_now:
-        add_playable("▶  Watch Live Now", {"mode": "play_mako"}, plot=he(title))
+        add_playable("▶  Watch Live Now", {"mode": "play_worker"}, plot=he(title))
         add_playable("⏺  Record Current Stream…",
                      {"mode": "record_now", "title": title},
                      plot="Asks for minutes, then records")
@@ -198,7 +174,7 @@ def schedule_recording(title, start_ms, dur_ms):
         recorder.add_timer(title,
                            int(start_ms / 1000),
                            int((start_ms + dur_ms) / 1000),
-                           LIVE_URL, "")
+                           WORKER, "")
         xbmcgui.Dialog().notification(
             "Scheduled",
             "{0} at {1}".format(title[:30], epg.fmt_time(start_ms)),
@@ -218,23 +194,21 @@ def record_now(title):
     except ValueError:
         mins = 60
     now = int(time.time())
-    recorder.add_timer(title or "Live Capture", now, now + mins * 60, LIVE_URL, "")
-    xbmcgui.Dialog().notification(
-        "Recording", "Recording for {0} min".format(mins),
-        xbmcgui.NOTIFICATION_INFO, 6000)
+    recorder.add_timer(title or "Live Capture", now, now + mins * 60, WORKER, "")
+    xbmcgui.Dialog().notification("Recording",
+                                  "Recording for {0} min".format(mins),
+                                  xbmcgui.NOTIFICATION_INFO, 6000)
     xbmcplugin.endOfDirectory(HANDLE)
 
 
 def record_current_stream():
-    """Ctrl+R handler — records whatever Mako stream is playing now."""
     try:
         u = xbmc.Player().getPlayingFile() or ""
     except Exception:
         u = ""
-    if "mako-streaming.akamaized.net" not in u:
-        xbmcgui.Dialog().notification(
-            "Israeli TV", "No Mako stream playing",
-            xbmcgui.NOTIFICATION_WARNING, 4000)
+    if "mako" not in u and "workers.dev" not in u:
+        xbmcgui.Dialog().notification("Israeli TV", "No stream playing",
+                                      xbmcgui.NOTIFICATION_WARNING, 4000)
         return
     kb = xbmcgui.Dialog().numeric(0, "Minutes to record", "60")
     if not kb:
@@ -245,9 +219,9 @@ def record_current_stream():
         mins = 60
     now = int(time.time())
     recorder.add_timer("Live Capture", now, now + mins * 60, u, "")
-    xbmcgui.Dialog().notification(
-        "Recording", "Recording current stream for {0} min".format(mins),
-        xbmcgui.NOTIFICATION_INFO, 6000)
+    xbmcgui.Dialog().notification("Recording",
+                                  "Recording for {0} min".format(mins),
+                                  xbmcgui.NOTIFICATION_INFO, 6000)
 
 
 def timers():
@@ -281,8 +255,6 @@ def del_timer(tid):
     xbmcplugin.endOfDirectory(HANDLE)
 
 
-# ---------- router ----------
-
 def main():
     params = dict(parse_qsl(sys.argv[2][1:])) if len(sys.argv) > 2 else {}
     mode = params.get("mode", "root")
@@ -292,14 +264,11 @@ def main():
     elif mode == "play":
         try:
             ch = CHANNELS[int(params.get("idx", "0"))]
-        except (ValueError, IndexError):
-            return
-        if ch["type"] == "mako":
-            _play_mako(ch["url"])
-        else:
             _play(ch["url"])
-    elif mode == "play_mako":
-        _play_mako(LIVE_URL)
+        except (ValueError, IndexError):
+            pass
+    elif mode == "play_worker":
+        _play(WORKER)
     elif mode == "guide":
         tv_guide()
     elif mode == "program":

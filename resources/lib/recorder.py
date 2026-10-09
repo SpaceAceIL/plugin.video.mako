@@ -73,14 +73,55 @@ def save_active(a):
 
 
 def find_ffmpeg(configured=""):
+    """Find ffmpeg. Priority: user setting -> PATH -> common locations."""
+    # 1. user-configured path
     if configured and os.path.isfile(configured):
         return configured
+
+    # 2. on PATH
     import shutil
-    for n in ("ffmpeg", "ffmpeg.exe"):
-        p = shutil.which(n)
+    for name in ("ffmpeg", "ffmpeg.exe"):
+        p = shutil.which(name)
         if p:
             return p
+
+    # 3. common locations
+    candidates = [
+        "/usr/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "/opt/homebrew/bin/ffmpeg",
+        "/snap/bin/ffmpeg",
+        "C:\Program Files\ffmpeg\bin\ffmpeg.exe",
+        "C:\ffmpeg\bin\ffmpeg.exe",
+        os.path.expanduser("~\ffmpeg\bin\ffmpeg.exe"),
+    ]
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
     return ""
+
+
+def configured_ffmpeg():
+    """Read ffmpeg path from addon settings."""
+    try:
+        import xbmcaddon
+        return (xbmcaddon.Addon().getSetting("ffmpeg_path") or "").strip()
+    except Exception:
+        return ""
+
+
+def configured_dir():
+    """Read recordings directory from addon settings."""
+    try:
+        import xbmcaddon
+        d = (xbmcaddon.Addon().getSetting("recordings_dir") or "").strip()
+        if d and os.path.isdir(d):
+            return d
+    except Exception:
+        pass
+    # fall back to addon profile dir
+    return os.path.join(_profile_dir(), "recordings")
+
 
 
 def spawn(ffmpeg, stream_url, output_path, log):

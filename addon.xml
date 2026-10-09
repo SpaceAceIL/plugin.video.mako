@@ -16,8 +16,8 @@
     <license>GPL-2.0-only</license>
     <source>https://github.com/SpaceAceIL/plugin.video.mako</source>
     <assets>
-      <icon>https://uxwing.com/wp-content/themes/uxwing/download/flags-landmarks/israel-flag-round-circle-icon.svg</icon>
-      <fanart>https://uxwing.com/wp-content/themes/uxwing/download/flags-landmarks/israel-flag-round-circle-icon.svg</fanart>
+      <icon>resources/icon.png</icon>
+      <fanart>resources/fanart.jpg</fanart>
     </assets>
   </extension>
 </addon>
