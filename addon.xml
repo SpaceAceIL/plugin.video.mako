@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="5.1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="plugin.video.mako" name="Israeli TV" version="5.0.0" provider-name="SpaceAce">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
@@ -16,8 +16,8 @@
     <license>GPL-2.0-only</license>
     <source>https://github.com/SpaceAceIL/plugin.video.mako</source>
     <assets>
-      <icon>https://upload.wikimedia.org/wikipedia/commons/d/d4/Flag_of_Israel.svg</icon>
-      <fanart>https://upload.wikimedia.org/wikipedia/commons/d/d4/Flag_of_Israel.svg</fanart>
+      <icon>https://uxwing.com/wp-content/themes/uxwing/download/flags-landmarks/israel-flag-round-circle-icon.svg</icon>
+      <fanart>https://uxwing.com/wp-content/themes/uxwing/download/flags-landmarks/israel-flag-round-circle-icon.svg</fanart>
     </assets>
   </extension>
 </addon>
