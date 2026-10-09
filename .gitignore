@@ -12,3 +12,4 @@ mako-worker/.wrangler/
 mako-worker/dist/
 mako-worker/package-lock.json
 .DS_Store
+special:
