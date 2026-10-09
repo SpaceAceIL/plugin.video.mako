@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
+  <category label="Language">
+    <setting id="language" type="labelenum"
+             label="UI Language"
+             values="Auto (follow Kodi)|English|עברית"
+             default="עברית"/>
+  </category>
   <category label="Network">
     <setting id="user_agent" type="text" label="User-Agent"
              default="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"/>
   </category>
   <category label="Recording">
-    <setting id="recordings_dir" type="folder" label="Recordings folder"
-             default=""/>
-    <setting id="ffmpeg_path" type="file" label="ffmpeg binary (leave empty to auto-detect)"
-             default=""/>
+    <setting id="recordings_dir" type="folder" label="Recordings folder" default=""/>
+    <setting id="ffmpeg_path" type="file" label="ffmpeg binary (blank = auto)" default=""/>
   </category>
 </settings>

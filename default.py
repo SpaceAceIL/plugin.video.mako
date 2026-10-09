@@ -1,8 +1,14 @@
 # -*- coding: utf-8 -*-
 """Mako Live — Made by SpaceAce (space@anan.media)."""
-import os, sys
-from urllib.parse import parse_qsl, unquote, quote
-import xbmc, xbmcgui, xbmcplugin, xbmcaddon
+import os
+import sys
+import time
+from urllib.parse import parse_qsl, quote
+
+import xbmc
+import xbmcgui
+import xbmcplugin
+import xbmcaddon
 
 _ADDON = xbmcaddon.Addon()
 _LIB = os.path.join(_ADDON.getAddonInfo("path"), "resources", "lib")
@@ -11,14 +17,21 @@ if _LIB not in sys.path:
 
 from resources.lib.mako import resolve, LIVE_URL
 from resources.lib import epg, recorder
+from resources.lib.strings import _, current_lang
 
 HANDLE  = int(sys.argv[1]) if len(sys.argv) > 1 else -1
 BASEURL = sys.argv[0] if sys.argv else ""
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-POPUP_TITLE   = "Mako Live"
-POPUP_MESSAGE = "Streaming Channel 12 live.\n\nMade by SpaceAce"
+
+def he(s):
+    """Prefix RLM to Hebrew content so skins render RTL correctly."""
+    if not s:
+        return s
+    if any("\u0590" <= c <= "\u05ff" for c in s):
+        return "\u200f" + s
+    return s
 
 
 def url(**params):
@@ -48,66 +61,71 @@ def _play(stream_url):
     li.setProperty("inputstream.adaptive.manifest_type", "hls")
     li.setProperty("inputstream.adaptive.stream_headers",
                    "User-Agent={0}&Referer=https://www.mako.co.il/".format(UA))
-    xbmcplugin.setResolvedUrl(HANDLE, True, li)
+    li.setProperty("inputstream.adaptive.manifest_headers",
+                   "User-Agent={0}".format(UA))
+
+    if HANDLE >= 0:
+        try:
+            xbmcplugin.setResolvedUrl(HANDLE, True, li)
+            return
+        except Exception as e:
+            xbmc.log("[mako] setResolvedUrl failed: {0}".format(e),
+                     xbmc.LOGWARNING)
+
+    xbmc.Player().play(stream_url, li)
+    xbmc.sleep(3000)
+    xbmcgui.Dialog().notification(_("resolve_title"), _("playing_hint"),
+                                  xbmcgui.NOTIFICATION_INFO, 5000)
 
 
 def _resolve_play(article):
-    pd = xbmcgui.DialogProgress(); pd.create("Mako Live", "Resolving...")
+    pd = xbmcgui.DialogProgress()
+    pd.create(_("resolve_title"), _("resolve_msg"))
     try:
-        pd.update(30, "Fetching...")
-        s, _ = resolve(article, log=xbmc.log)
-        pd.update(90, "Playing...")
+        pd.update(30, _("fetching"))
+        s, _title = resolve(article, log=xbmc.log)
+        pd.update(90, _("starting"))
         pd.close()
         _play(s)
     except Exception as e:
         xbmc.log("[mako] " + str(e), xbmc.LOGERROR)
-        xbmcgui.Dialog().notification("Mako Live", str(e),
+        xbmcgui.Dialog().notification(_("resolve_title"), str(e),
                                       xbmcgui.NOTIFICATION_ERROR, 6000)
-        xbmcplugin.setResolvedUrl(HANDLE, False, xbmcgui.ListItem())
-        try: pd.close()
-        except: pass
-
-
-def _record_now(article, program_title, duration_min):
-    """Schedule a recording that starts immediately."""
-    try:
-        stream, _ = resolve(article, log=xbmc.log)
-    except Exception as e:
-        xbmcgui.Dialog().notification("Mako", "Resolve failed: {0}".format(e),
-                                      xbmcgui.NOTIFICATION_ERROR, 6000)
-        return
-    now = int(__import__("time").time())
-    end = now + int(duration_min) * 60
-    recorder.add_timer(program_title, now, end, stream, "")
-    xbmcgui.Dialog().notification(
-        "Mako Recording",
-        "Recording {0} for {1} min".format(program_title[:30], duration_min),
-        xbmcgui.NOTIFICATION_INFO, 5000)
-
-
-def _schedule_recording(program):
-    """Schedule a future program."""
-    import time as _t
-    start_unix = program["start_ms"] // 1000
-    end_unix   = (program["start_ms"] + program["duration_ms"]) // 1000
-    # resolve live URL now (valid ~15 min) — the timer will fetch fresh at start
-    recorder.add_timer(program["title"], start_unix, end_unix, LIVE_URL, "")
-    xbmcgui.Dialog().notification(
-        "Mako Scheduled",
-        "Will record {0} at {1}".format(
-            program["title"][:30], epg.fmt_time(program["start_ms"])),
-        xbmcgui.NOTIFICATION_INFO, 6000)
+        if HANDLE >= 0:
+            xbmcplugin.setResolvedUrl(HANDLE, False, xbmcgui.ListItem())
+        try:
+            pd.close()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------- menus
 
 def main_menu():
-    add_dir("\u05e2\u05e8\u05d5\u05e5 12 \u05d1\u05dc\u05d9\u05d9\u05d5 \u2013 Live Now",
-            {"mode": "live"})
-    add_dir("TV Guide  \u2013 \u05dc\u05d5\u05d7 \u05e9\u05d9\u05d3\u05d5\u05e8\u05d9\u05dd",
-            {"mode": "guide"})
-    add_dir("Scheduled Recordings",
-            {"mode": "timers"})
+    li = xbmcgui.ListItem(label=_("live_now"))
+    xbmcplugin.addDirectoryItem(HANDLE, url(mode="live"), li, isFolder=False)
+
+    add_dir(_("tv_guide"), {"mode": "guide"})
+    add_dir(_("scheduled"), {"mode": "timers"})
+    add_dir(_("language"), {"mode": "language_menu"})
+    xbmcplugin.endOfDirectory(HANDLE)
+
+
+def language_menu():
+    current = _ADDON.getSetting("language") or "Auto (follow Kodi)"
+    for val in ("Auto (follow Kodi)", "English", "עברית"):
+        mark = "• " if val == current else "   "
+        label = mark + val
+        li = xbmcgui.ListItem(label=label)
+        xbmcplugin.addDirectoryItem(
+            HANDLE, url(mode="set_language", lang=val), li, isFolder=False)
+    xbmcplugin.endOfDirectory(HANDLE)
+
+
+def set_language(value):
+    _ADDON.setSetting("language", value)
+    xbmcgui.Dialog().notification(_("language"), value,
+                                  xbmcgui.NOTIFICATION_INFO, 3000)
     xbmcplugin.endOfDirectory(HANDLE)
 
 
@@ -115,100 +133,155 @@ def guide():
     try:
         programs = epg.fetch_epg(log=xbmc.log)
     except Exception as e:
-        xbmcgui.Dialog().notification("Mako EPG", str(e),
+        xbmcgui.Dialog().notification(_("epg_title"), str(e),
                                       xbmcgui.NOTIFICATION_ERROR, 6000)
         xbmcplugin.endOfDirectory(HANDLE)
         return
 
-    now_ms = int(__import__("time").time() * 1000)
-    # Show a window: previous 2h through next 24h
+    now_ms = int(time.time() * 1000)
     items = [p for p in programs
              if p["start_ms"] + p["duration_ms"] > now_ms - 7200000
              and p["start_ms"] < now_ms + 24 * 3600 * 1000]
 
     for p in items:
         is_now = p["start_ms"] <= now_ms < p["start_ms"] + p["duration_ms"]
+        marker = "▶" if is_now else "  "
         label = "{0}  {1}-{2}  {3}".format(
-            "\u25b6" if is_now else "  ",
+            marker,
             epg.fmt_time(p["start_ms"]),
             epg.fmt_time(p["start_ms"] + p["duration_ms"]),
-            p["title"])
+            he(p["title"]))
         plot = "{0}\n\n{1}-{2}".format(
-            p["description"],
+            he(p["description"]),
             epg.fmt_time(p["start_ms"]),
             epg.fmt_time(p["start_ms"] + p["duration_ms"]))
-        add_playable(label,
-                     {"mode": "program",
-                      "title": p["title"][:80],
-                      "start_ms": p["start_ms"],
-                      "dur_ms": p["duration_ms"],
-                      "live": 1 if is_now else 0},
-                     icon=p["picture"], plot=plot)
+        add_dir(label,
+                {"mode": "program",
+                 "title": p["title"][:80],
+                 "start_ms": p["start_ms"],
+                 "dur_ms": p["duration_ms"],
+                 "live": 1 if is_now else 0},
+                icon=p["picture"])
     xbmcplugin.endOfDirectory(HANDLE)
 
 
-def program_actions(title, start_ms, dur_ms, is_now):
-    options = []
+def program_menu(title, start_ms, dur_ms, is_now):
     if is_now:
-        options.append("\u25b6 Watch Live Now")
-        options.append("\u23fa Record Now")
-    if start_ms > int(__import__("time").time() * 1000):
-        options.append("\U0001f4c5 Schedule Recording")
-    options.append("Info")
-
-    ch = xbmcgui.Dialog().select(title, options)
-    if ch < 0:
-        xbmcplugin.setResolvedUrl(HANDLE, False, xbmcgui.ListItem())
-        return
-    choice = options[ch]
-
-    if "Watch" in choice:
-        _resolve_play(LIVE_URL)
-    elif "Record Now" in choice:
-        kb = xbmcgui.Dialog().numeric(0, "Minutes to record", "60")
-        try:
-            mins = int(kb) if kb else 60
-        except ValueError:
-            mins = 60
-        _record_now(LIVE_URL, title, mins)
-        xbmcplugin.setResolvedUrl(HANDLE, False, xbmcgui.ListItem())
-    elif "Schedule" in choice:
-        _schedule_recording({"title": title,
-                             "start_ms": start_ms,
-                             "duration_ms": dur_ms})
-        xbmcplugin.setResolvedUrl(HANDLE, False, xbmcgui.ListItem())
+        add_playable(_("watch_live"), {"mode": "live"}, plot=he(title))
+        add_playable(_("record_stream"),
+                     {"mode": "record_now", "title": title},
+                     plot=_("record_desc"))
     else:
-        xbmcgui.Dialog().textviewer(title, "Starts at " + epg.fmt_time(start_ms) +
-                                    "\nEnds at " + epg.fmt_time(start_ms + dur_ms))
-        xbmcplugin.setResolvedUrl(HANDLE, False, xbmcgui.ListItem())
+        add_playable(_("schedule_rec"),
+                     {"mode": "schedule",
+                      "title": title,
+                      "start_ms": start_ms,
+                      "dur_ms": dur_ms},
+                     plot=_("schedule_desc", epg.fmt_time(start_ms)))
+    add_playable(_("program_info"),
+                 {"mode": "program_info",
+                  "title": title,
+                  "start_ms": start_ms,
+                  "dur_ms": dur_ms})
+    xbmcplugin.endOfDirectory(HANDLE)
+
+
+def program_info(title, start_ms, dur_ms):
+    body = "{0}: {1}\n{2}: {3}\n{4}: {5} {6}".format(
+        _("info_start"),
+        time.strftime("%a %d/%m %H:%M", time.localtime(start_ms / 1000.0)),
+        _("info_end"),
+        time.strftime("%a %d/%m %H:%M",
+                      time.localtime((start_ms + dur_ms) / 1000.0)),
+        _("info_duration"), int(dur_ms / 60000), _("info_min"))
+    xbmcgui.Dialog().textviewer(he(title), body)
+    xbmcplugin.endOfDirectory(HANDLE)
+
+
+def schedule_recording(title, start_ms, dur_ms):
+    try:
+        recorder.add_timer(title,
+                           int(start_ms / 1000),
+                           int((start_ms + dur_ms) / 1000),
+                           LIVE_URL, "")
+        xbmcgui.Dialog().notification(
+            _("scheduled_title"),
+            _("scheduled_msg", title[:30], epg.fmt_time(start_ms)),
+            xbmcgui.NOTIFICATION_INFO, 6000)
+    except Exception as e:
+        xbmcgui.Dialog().notification(_("resolve_title"), str(e),
+                                      xbmcgui.NOTIFICATION_ERROR, 5000)
+    xbmcplugin.endOfDirectory(HANDLE)
+
+
+def record_now(title):
+    kb = xbmcgui.Dialog().numeric(0, _("minutes"), "60")
+    if not kb:
+        xbmcplugin.endOfDirectory(HANDLE)
+        return
+    try:
+        mins = int(kb)
+    except ValueError:
+        mins = 60
+    now = int(time.time())
+    recorder.add_timer(title or _("live_capture"),
+                       now, now + mins * 60, LIVE_URL, "")
+    xbmcgui.Dialog().notification(
+        _("recording"),
+        _("recording_msg", mins),
+        xbmcgui.NOTIFICATION_INFO, 6000)
+    xbmcplugin.endOfDirectory(HANDLE)
+
+
+def record_current_stream():
+    try:
+        u = xbmc.Player().getPlayingFile() or ""
+    except Exception:
+        u = ""
+    if "mako-streaming.akamaized.net" not in u:
+        xbmcgui.Dialog().notification(_("resolve_title"), _("no_stream"),
+                                      xbmcgui.NOTIFICATION_WARNING, 4000)
+        return
+    kb = xbmcgui.Dialog().numeric(0, _("minutes"), "60")
+    if not kb:
+        return
+    try:
+        mins = int(kb)
+    except ValueError:
+        mins = 60
+    now = int(time.time())
+    recorder.add_timer(_("live_capture"), now, now + mins * 60, u, "")
+    xbmcgui.Dialog().notification(
+        _("recording"),
+        _("recording_msg", mins),
+        xbmcgui.NOTIFICATION_INFO, 6000)
 
 
 def timers():
     items = recorder.load_timers()
     active = {a["id"]: a for a in recorder.load_active()}
     for t in items:
-        if t.get("status") == "done":
-            label = "[DONE] {0}  {1}".format(
-                t.get("title", "?"),
-                __import__("time").strftime(
-                    "%d/%m %H:%M", __import__("time").localtime(t["start_unix"])))
+        status = t.get("status", "?")
+        if status == "done":
+            prefix = "[" + _("status_done") + "] "
         elif t.get("id") in active:
-            label = "[REC] {0}".format(t.get("title", "?"))
+            prefix = "[" + _("status_rec") + "] "
         else:
-            label = "[{0}] {1}  {2}".format(
-                t.get("status", "?"),
-                t.get("title", "?"),
-                __import__("time").strftime(
-                    "%d/%m %H:%M", __import__("time").localtime(t["start_unix"])))
+            prefix = "[{0}] ".format(status)
+        label = prefix + "{0}  {1}".format(
+            he(t.get("title", "?")),
+            time.strftime("%d/%m %H:%M",
+                          time.localtime(t["start_unix"])))
         li = xbmcgui.ListItem(label=label)
-        xbmcplugin.addDirectoryItem(HANDLE, url(mode="del_timer", tid=t["id"]),
-                                     li, isFolder=False)
+        xbmcplugin.addDirectoryItem(HANDLE,
+                                    url(mode="del_timer", tid=t["id"]),
+                                    li, isFolder=False)
     xbmcplugin.endOfDirectory(HANDLE)
 
 
 def del_timer(tid):
     recorder.remove_timer(tid)
-    xbmcgui.Dialog().notification("Mako", "Timer removed",
+    xbmcgui.Dialog().notification(_("resolve_title"), _("timer_removed"),
                                   xbmcgui.NOTIFICATION_INFO, 3000)
     xbmcplugin.endOfDirectory(HANDLE)
 
@@ -226,14 +299,30 @@ def main():
     elif mode == "guide":
         guide()
     elif mode == "program":
-        program_actions(params.get("title", ""),
-                        int(params.get("start_ms", 0)),
-                        int(params.get("dur_ms", 0)),
-                        params.get("live", "0") == "1")
+        program_menu(params.get("title", ""),
+                     int(params.get("start_ms", 0)),
+                     int(params.get("dur_ms", 0)),
+                     params.get("live", "0") == "1")
+    elif mode == "program_info":
+        program_info(params.get("title", ""),
+                     int(params.get("start_ms", 0)),
+                     int(params.get("dur_ms", 0)))
+    elif mode == "schedule":
+        schedule_recording(params.get("title", ""),
+                           int(params.get("start_ms", 0)),
+                           int(params.get("dur_ms", 0)))
+    elif mode == "record_now":
+        record_now(params.get("title", ""))
+    elif mode == "record_current":
+        record_current_stream()
     elif mode == "timers":
         timers()
     elif mode == "del_timer":
         del_timer(params.get("tid", ""))
+    elif mode == "language_menu":
+        language_menu()
+    elif mode == "set_language":
+        set_language(params.get("lang", "Auto (follow Kodi)"))
     else:
         main_menu()
 
