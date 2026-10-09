@@ -1,6 +1,14 @@
 __pycache__/
-*.py[cod]
+*.pyc
 *.log
+.git/
+dist/
+zips/
+plugin.video.mako.zip
+
+# Node / wrangler
+mako-worker/node_modules/
+mako-worker/.wrangler/
+mako-worker/dist/
+mako-worker/package-lock.json
 .DS_Store
-.vscode/
-.idea/
