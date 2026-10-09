@@ -1,4 +1,4 @@
-<?xml version="5.0.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="plugin.video.mako" name="Israeli TV" version="5.0.0" provider-name="SpaceAce">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
@@ -9,13 +9,12 @@
     <provides>video</provides>
   </extension>
   <extension point="xbmc.addon.metadata">
-    <summary lang="en_GB">Mako / Channel 12 live + EPG + recording</summary>
-    <description lang="en_GB">Live stream, TV guide and scheduled recordings for Mako. Made by SpaceAce.</description>
+    <summary lang="en_GB">Israeli TV — live channels + EPG</summary>
+    <description lang="en_GB">Live Israeli TV channels (Kan 11, Keshet 12, Channel 13, Channel 14, Makan 33, Kan Educational, Knesset) with EPG. Made by SpaceAce.</description>
     <disclaimer lang="en_GB">Made by SpaceAce. Not affiliated with Mako or Keshet.</disclaimer>
     <platform>all</platform>
     <license>GPL-2.0-only</license>
     <source>https://github.com/SpaceAceIL/plugin.video.mako</source>
-    <email>space@anan.media</email>
     <assets>
       <icon>https://upload.wikimedia.org/wikipedia/commons/d/d4/Flag_of_Israel.svg</icon>
       <fanart>https://upload.wikimedia.org/wikipedia/commons/d/d4/Flag_of_Israel.svg</fanart>
