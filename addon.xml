@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.mako"
+       name="Mako Live"
+       version="3.0.0"
+       provider-name="SpaceAce">
+  <requires>
+    <import addon="xbmc.python" version="3.0.0"/>
+    <import addon="inputstream.adaptive" version="2.4.0" optional="true"/>
+  </requires>
+  <extension point="xbmc.service" library="service.py" start="startup"/>
+  <extension point="xbmc.python.pluginsource" library="default.py">
+    <provides>video</provides>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en_GB">Mako / Channel 12 live stream</summary>
+    <description lang="en_GB">Plays the Mako Channel 12 live stream in Kodi. Made by SpaceAce. Auto token refresh.</description>
+    <disclaimer lang="en_GB">Made by SpaceAce. Not affiliated with Mako or Keshet.</disclaimer>
+    <platform>all</platform>
+    <license>GPL-2.0-only</license>
+    <source>https://github.com/SpaceAceIL/plugin.video.mako</source>
+    <email>space@anan.media</email>
+    <assets>
+      <icon>resources/icon.png</icon>
+      <fanart>resources/fanart.jpg</fanart>
+    </assets>
+  </extension>
+</addon>
